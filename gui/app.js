@@ -2,6 +2,23 @@ const byId = (id) => document.getElementById(id);
 const write = (id, text) => { byId(id).textContent = text; };
 const pretty = (value) => JSON.stringify(value, null, 2);
 const state = { snapshot: null, lastTitle: undefined, previous: [], busy: false };
+const ideaHistory = [];
+
+const pin = byId("pin-window");
+pin.onclick = async () => {
+  pin.disabled = true;
+  try {
+    const { enabled: pinned } = await api("/api/window/topmost", {
+      enabled: pin.getAttribute("aria-pressed") !== "true",
+    });
+    pin.setAttribute("aria-pressed", String(pinned));
+    pin.textContent = pinned ? "已置顶" : "置顶";
+  } catch (error) {
+    showError(error);
+  } finally {
+    pin.disabled = false;
+  }
+};
 let modelProfiles = { active: null, profiles: [] };
 let backgroundEnabled = false;
 const backgrounds = new Map();
@@ -38,6 +55,9 @@ function setBusy(busy) {
   byId("generate").disabled = busy;
   byId("retry").disabled = busy || !state.previous.length;
   byId("open-settings").disabled = busy;
+  byId("idea").disabled = busy;
+  byId("idea-history").disabled = busy;
+  byId("correction").disabled = busy;
   byId("background").disabled = busy || !state.snapshot?.ConversationTitle;
   byId("refresh-background").disabled = busy || !state.snapshot?.ConversationTitle;
 }
@@ -190,7 +210,21 @@ async function run(action) {
   }
 }
 
+function rememberIdea(idea) {
+  if (!idea) return;
+  const existing = ideaHistory.indexOf(idea);
+  if (existing !== -1) ideaHistory.splice(existing, 1);
+  ideaHistory.unshift(idea);
+  const select = byId("idea-history");
+  select.replaceChildren(new Option("选择之前用过的方向…", ""));
+  for (const value of ideaHistory) {
+    select.append(new Option(value.replace(/\s+/g, " "), value));
+  }
+  byId("idea-history-field").hidden = false;
+}
+
 async function generate(retry) {
+  if (!retry) byId("correction").value = "";
   write("status", "正在确认当前微信会话…");
   const { title, previousTitle, changed } = await refreshConversation();
   if (!title) {
@@ -212,10 +246,15 @@ async function generate(retry) {
   write("status", "正在生成候选回复…");
   write("debug-model", "正在等待模型");
   write("debug-request", "正在构建请求并等待返回…");
+  const idea = retry ? "" : byId("idea").value.trim();
+  if (!retry) {
+    rememberIdea(idea);
+    byId("idea").value = "";
+  }
   try {
     const { request, replies } = await api("/api/generate", {
       snapshot: state.snapshot,
-      idea: byId("idea").value,
+      idea,
       correction: retry ? byId("correction").value : "",
       previous_replies: retry ? state.previous : [],
       background: backgroundEnabled ? backgrounds.get(title)?.text ?? "" : "",
@@ -241,6 +280,13 @@ byId("refresh").onclick = () => run(async () => {
 });
 byId("generate").onclick = () => run(() => generate(false));
 byId("retry").onclick = () => run(() => generate(true));
+byId("idea-history").onchange = () => {
+  const select = byId("idea-history");
+  if (select.value) {
+    byId("idea").value = select.value;
+    select.value = "";
+  }
+};
 byId("background").oninput = () => {
   const title = state.snapshot?.ConversationTitle;
   if (title) backgrounds.set(title, { ...backgrounds.get(title), text: byId("background").value });

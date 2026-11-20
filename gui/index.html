@@ -11,6 +11,7 @@
   <header class="topbar">
     <a class="brand" href="/">AutoReply</a>
     <nav aria-label="工具">
+      <button id="pin-window" aria-pressed="true">已置顶</button>
       <button id="open-settings">设置</button>
       <button id="open-debug" aria-expanded="false" aria-controls="debug">调试面板</button>
     </nav>
@@ -35,10 +36,15 @@
         <p id="background-status" aria-live="polite"></p>
       </section>
       <div class="fields">
-        <label>大致回复想法 <span>可选</span>
+        <label>回复方向 <span>仅本次生成使用</span>
           <textarea id="idea" rows="2" placeholder="例如：答应对方，并确认见面的时间"></textarea>
         </label>
-        <label>再次生成的纠正或方向 <span>可选</span>
+        <label id="idea-history-field" hidden>回复方向历史
+          <select id="idea-history">
+            <option value="">选择之前用过的方向…</option>
+          </select>
+        </label>
+        <label>修改意见 <span>仅再次生成使用</span>
           <textarea id="correction" rows="2" placeholder="例如：语气再随意一点"></textarea>
         </label>
       </div>

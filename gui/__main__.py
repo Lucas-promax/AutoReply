@@ -1,12 +1,11 @@
 import json
-import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Timer
+from threading import Lock, Thread
 
-from capture.client import capture_wechat
+from capture.chat_text.client import capture_wechat
 from core import ReplyOptions, build_prompt, load_settings, normalize_messages, recommend_replies
-from core.model_profiles import public_profiles, read_config, read_profiles, save_profile, write_config
+from core.model_profiles import SETTINGS_PATH, public_profiles, read_config, read_profiles, save_profile, write_config
 from core.replies import build_background_prompt, summarize_background
 
 DIRECTORY = Path(__file__).resolve().parent
@@ -53,7 +52,7 @@ def save_preferences(data):
 
 
 def migrate_preferences():
-    config = read_config()
+    config = read_config() if SETTINGS_PATH.exists() else {}
     if "reply_preferences" in config:
         return
     previous = json.loads(LEGACY_PREFERENCES.read_text(encoding="utf-8-sig")) if LEGACY_PREFERENCES.exists() else {}
@@ -151,6 +150,12 @@ class Handler(BaseHTTPRequestHandler):
                 snapshot = json.loads(capture_wechat())
                 records = [message.to_record() for message in normalize_messages(snapshot)]
                 self.send_json({"snapshot": snapshot, "records": records})
+            elif self.path == "/api/window/topmost":
+                enabled = data.get("enabled")
+                if not isinstance(enabled, bool):
+                    raise ValueError("置顶状态无效。")
+                self.server.window.on_top = enabled
+                self.send_json({"enabled": self.server.window.on_top})
             elif self.path == "/api/generate":
                 result = generate(data)
                 self.send_json(result, 502 if "error" in result else 200)
@@ -172,18 +177,26 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    from threading import Lock
-
+    try:
+        import webview
+    except ImportError as error:
+        raise SystemExit("Install the desktop dependency: .venv\\Scripts\\python.exe -m pip install -r requirements.txt") from error
     migrate_preferences()
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
         server.settings_lock = Lock()
         url = f"http://127.0.0.1:{server.server_port}/"
-        print(f"AutoReply: {url}", flush=True)
-        Timer(0.15, webbrowser.open, args=(url,)).start()
+        server.window = webview.create_window(
+            "AutoReply", url, width=510, height=740, min_size=(390, 420),
+            on_top=True, text_select=True, background_color="#edf3ef",
+        )
+
+        worker = Thread(target=server.serve_forever, daemon=True)
+        worker.start()
         try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            pass
+            webview.start(gui="edgechromium")
+        finally:
+            server.shutdown()
+            worker.join()
 
 
 if __name__ == "__main__":

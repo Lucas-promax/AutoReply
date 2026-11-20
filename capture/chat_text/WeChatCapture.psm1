@@ -31,6 +31,7 @@ namespace AutoReply
         {
             public string Text { get; private set; }
             public string Direction { get; private set; }
+            public int[] ImageBounds { get; set; }
 
             public MessageRow(string text, string direction)
             {
@@ -47,7 +48,7 @@ namespace AutoReply
         private static extern int AccessibleChildren(IAccessible parent, int start, int count,
             [Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 2)] object[] children, out int fetched);
 
-        public static Conversation Read(IntPtr window)
+        public static Conversation Read(IntPtr window, bool includeImages)
         {
             var interfaceId = typeof(IAccessible).GUID;
             IAccessible client;
@@ -66,10 +67,54 @@ namespace AutoReply
                 var node = entry as IAccessible;
                 object childId = node == null ? entry : 0;
                 var owner = node ?? lists[0];
-                if (Convert.ToInt32(owner.get_accRole(childId)) == ListItemRole)
-                    rows.Add(new MessageRow(owner.get_accName(childId) ?? String.Empty, ReadDirection(node)));
+                if (Convert.ToInt32(owner.get_accRole(childId)) != ListItemRole)
+                    continue;
+                var row = new MessageRow(owner.get_accName(childId) ?? String.Empty, ReadDirection(node));
+                if (includeImages && node != null && (row.Text == "[\u56fe\u7247]" || row.Text == "[Image]"))
+                    row.ImageBounds = FindImageBounds(node, lists[0]);
+                rows.Add(row);
             }
             return new Conversation { Title = ReadTitle(lists[0], textFields), Rows = rows.ToArray() };
+        }
+
+        private static int[] FindImageBounds(IAccessible row, IAccessible list)
+        {
+            try
+            {
+                int left, top, width, height;
+                list.accLocation(out left, out top, out width, out height, 0);
+                var buttons = new List<int[]>();
+                FindImageButtons(row, buttons, 0);
+                if (buttons.Count != 1)
+                    return null;
+                var b = buttons[0];
+                return b[0] >= left && b[1] >= top && (long)b[0] + b[2] <= (long)left + width &&
+                    (long)b[1] + b[3] <= (long)top + height ? b : null;
+            }
+            catch (COMException)
+            {
+                return null;
+            }
+        }
+
+        private static void FindImageButtons(IAccessible node, List<int[]> buttons, int depth)
+        {
+            if (depth > 10)
+                return;
+            if (depth >= 4 && Convert.ToInt32(node.get_accRole(0)) == PushButtonRole &&
+                String.IsNullOrEmpty(node.get_accName(0)))
+            {
+                int x, y, width, height;
+                node.accLocation(out x, out y, out width, out height, 0);
+                if (width > 0 && height > 0)
+                    buttons.Add(new[] {x, y, width, height});
+            }
+            foreach (var entry in Children(node))
+            {
+                var child = entry as IAccessible;
+                if (child != null)
+                    FindImageButtons(child, buttons, depth + 1);
+            }
         }
 
         private static string ReadTitle(IAccessible list, List<IAccessible> textFields)
@@ -215,7 +260,7 @@ namespace AutoReply
 
 function Get-WeChatConversation {
     [CmdletBinding()]
-    param()
+    param([switch]$IncludeImageTargets)
 
     $ErrorActionPreference = 'Stop'
     Initialize-WeChatCapture
@@ -235,22 +280,31 @@ function Get-WeChatConversation {
         throw "Expected one open WeChat main window. Found $($windows.Count)."
     }
 
-    $conversation = [AutoReply.WeChatMessages]::Read([IntPtr]$windows[0].Current.NativeWindowHandle)
+    $handle = $windows[0].Current.NativeWindowHandle
+    $conversation = [AutoReply.WeChatMessages]::Read([IntPtr]$handle, $IncludeImageTargets.IsPresent)
     $rows = $conversation.Rows
     $records = @(for ($index = 0; $index -lt $rows.Count; $index++) {
-        [pscustomobject]@{
+        $record = [ordered]@{
             Index = $index + 1
             Text = $rows[$index].Text
             Direction = $rows[$index].Direction
         }
+        if ($IncludeImageTargets -and $rows[$index].ImageBounds) {
+            $record.ImageBounds = $rows[$index].ImageBounds
+        }
+        [pscustomobject]$record
     })
 
-    [pscustomobject]@{
+    $snapshot = [ordered]@{
         Source = 'wechat'
         CapturedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
         ConversationTitle = $conversation.Title
         Records = $records
     }
+    if ($IncludeImageTargets) {
+        $snapshot.WindowHandle = $handle
+    }
+    [pscustomobject]$snapshot
 }
 
 Export-ModuleMember -Function Get-WeChatConversation
