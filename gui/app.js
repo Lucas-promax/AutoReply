@@ -12,8 +12,20 @@ async function api(path, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   };
-  const response = await fetch(path, options);
-  const data = await response.json();
+  let response;
+  let data;
+  try {
+    response = await fetch(path, options);
+    data = await response.json();
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("无法连接本地 AutoReply 服务，连接可能已断开。请重新运行 Start-AutoReply.cmd，并使用新打开的网页。", { cause: error });
+    }
+    if (error instanceof SyntaxError) {
+      throw new Error(`本地 AutoReply 服务返回了无法识别的数据（HTTP ${response.status}）。`, { cause: error });
+    }
+    throw error;
+  }
   if (!response.ok || data.error) {
     throw Object.assign(new Error(data.error || `请求失败（${response.status}）`), { details: data });
   }
@@ -317,12 +329,21 @@ byId("activate-profile").onclick = () => updateProfile({
 });
 api("/api/profiles").then(showActiveModel).catch(() => write("active-model", "模型配置未加载"));
 const preferencesReady = api("/api/preferences").then(applyPreferences).catch(() => {});
+const settingsDialog = byId("settings");
+const replyFields = ["count", "personal", "style", "background-enabled", "save-settings"];
+let replySettingsState = "idle";
+
+function setReplySettingsState(next) {
+  replySettingsState = next;
+  for (const id of replyFields) byId(id).disabled = next !== "ready";
+  byId("close-settings").disabled = next === "loading" || next === "saving";
+}
 
 byId("open-settings").onclick = async () => {
   write("settings-error", "");
   write("profile-status", "");
-  byId("settings").showModal();
-  byId("save-settings").disabled = true;
+  setReplySettingsState("loading");
+  settingsDialog.showModal();
   byId("save-profile").disabled = true;
   byId("profile").disabled = true;
   byId("activate-profile").disabled = true;
@@ -339,17 +360,20 @@ byId("open-settings").onclick = async () => {
     byId("count").value = data.count;
     byId("personal").value = data.personal_style;
     byId("style").value = data.reply_style;
+    setReplySettingsState("ready");
   } catch (error) {
     write("settings-error", error.message);
-  } finally {
-    byId("save-settings").disabled = false;
+    setReplySettingsState("unavailable");
   }
   await profiles;
 };
-byId("close-settings").onclick = () => byId("settings").close();
-byId("settings-form").onsubmit = async (event) => {
-  event.preventDefault();
-  byId("save-settings").disabled = true;
+async function saveAndCloseSettings() {
+  if (replySettingsState === "loading" || replySettingsState === "saving") return;
+  if (replySettingsState !== "ready") {
+    settingsDialog.close();
+    return;
+  }
+  setReplySettingsState("saving");
   try {
     const saved = await api("/api/preferences", {
       count: Number(byId("count").value),
@@ -358,10 +382,27 @@ byId("settings-form").onsubmit = async (event) => {
       background_enabled: byId("background-enabled").checked,
     });
     applyPreferences(saved);
-    byId("settings").close();
+    settingsDialog.close();
   } catch (error) {
     write("settings-error", error.message);
   } finally {
-    byId("save-settings").disabled = false;
+    setReplySettingsState("ready");
+  }
+}
+
+byId("close-settings").onclick = saveAndCloseSettings;
+byId("settings-form").onsubmit = (event) => {
+  event.preventDefault();
+  return saveAndCloseSettings();
+};
+settingsDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  void saveAndCloseSettings();
+});
+settingsDialog.onclick = (event) => {
+  if (event.target !== settingsDialog) return;
+  const { left, right, top, bottom } = settingsDialog.getBoundingClientRect();
+  if (event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom) {
+    return saveAndCloseSettings();
   }
 };

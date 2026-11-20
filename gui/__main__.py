@@ -6,11 +6,11 @@ from threading import Timer
 
 from capture.client import capture_wechat
 from core import ReplyOptions, build_prompt, load_settings, normalize_messages, recommend_replies
-from core.model_profiles import public_profiles, read_profiles, save_profile
+from core.model_profiles import public_profiles, read_config, read_profiles, save_profile, write_config
 from core.replies import build_background_prompt, summarize_background
 
 DIRECTORY = Path(__file__).resolve().parent
-PREFERENCES = DIRECTORY / "preferences.json"
+LEGACY_PREFERENCES = DIRECTORY / "preferences.json"
 ASSETS = {
     "/": ("index.html", "text/html"),
     "/app.js": ("app.js", "text/javascript"),
@@ -41,9 +41,24 @@ def preferences(data):
 
 
 def load_preferences():
-    if not PREFERENCES.exists():
-        return preferences({})
-    return preferences(json.loads(PREFERENCES.read_text(encoding="utf-8")))
+    return preferences(read_config().get("reply_preferences", {}))
+
+
+def save_preferences(data):
+    values = preferences(data)
+    config = read_config()
+    config["reply_preferences"] = values
+    write_config(config)
+    return values
+
+
+def migrate_preferences():
+    config = read_config()
+    if "reply_preferences" in config:
+        return
+    previous = json.loads(LEGACY_PREFERENCES.read_text(encoding="utf-8-sig")) if LEGACY_PREFERENCES.exists() else {}
+    config["reply_preferences"] = preferences(previous)
+    write_config(config)
 
 
 def generate(data):
@@ -143,16 +158,12 @@ class Handler(BaseHTTPRequestHandler):
                 result = generate_background(data)
                 self.send_json(result, 502 if "error" in result else 200)
             elif self.path == "/api/profiles":
-                with self.server.preferences_lock:
+                with self.server.settings_lock:
                     result = save_profile(data)
                 self.send_json(result)
             elif self.path == "/api/preferences":
-                values = preferences(data)
-                pending = PREFERENCES.with_suffix(".tmp")
-                # Serialize concurrent browser tabs through an atomic file replacement.
-                with self.server.preferences_lock:
-                    pending.write_text(json.dumps(values, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-                    pending.replace(PREFERENCES)
+                with self.server.settings_lock:
+                    values = save_preferences(data)
                 self.send_json(values)
             else:
                 self.send_json({"error": "接口不存在。"}, 404)
@@ -163,8 +174,9 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     from threading import Lock
 
+    migrate_preferences()
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
-        server.preferences_lock = Lock()
+        server.settings_lock = Lock()
         url = f"http://127.0.0.1:{server.server_port}/"
         print(f"AutoReply: {url}", flush=True)
         Timer(0.15, webbrowser.open, args=(url,)).start()

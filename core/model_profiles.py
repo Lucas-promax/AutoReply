@@ -7,13 +7,18 @@ from uuid import uuid4
 SETTINGS_PATH = Path(__file__).with_name("settings.json")
 
 
-def read_profiles(path: Path = SETTINGS_PATH) -> dict:
+def read_config(path: Path = SETTINGS_PATH) -> dict:
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as error:
         raise ValueError("无法读取 core/settings.json，请检查文件及 JSON 格式。") from error
     if not isinstance(data, dict):
         raise ValueError("settings.json 必须是 JSON 对象。")
+    return data
+
+
+def read_profiles(path: Path = SETTINGS_PATH) -> dict:
+    data = read_config(path)
     if "profiles" not in data:
         data["profiles"] = [{
             "id": "default",
@@ -70,6 +75,11 @@ def save_profile(data: dict, path: Path = SETTINGS_PATH) -> dict:
     config["active_profile"] = current["id"]
     for key in ("base_url", "api_key", "model"):
         config.pop(key, None)
+    write_config(config, path)
+    return public_profiles(config)
+
+
+def write_config(config: dict, path: Path = SETTINGS_PATH) -> None:
     path = Path(path)
     with NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as stream:
         pending = Path(stream.name)
@@ -84,4 +94,3 @@ def save_profile(data: dict, path: Path = SETTINGS_PATH) -> dict:
         pending.replace(path)
     finally:
         pending.unlink(missing_ok=True)
-    return public_profiles(config)

@@ -119,6 +119,14 @@ pre, .history {
 .history p + p { margin-top: 6px; }
 .history strong { color: #9cd8bb; }
 dialog { color: inherit; width: min(92vw, 520px); max-height: 90vh; padding: 22px; }
+#close-settings {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 22px;
+  line-height: 1;
+  padding: 5px 9px;
+}
 #profile-form { border-top: 1px solid #d9e5dc; margin-top: 22px; padding-top: 20px; }
 #profile { width: 100%; }
 dialog::backdrop { background: #10211b85; }
