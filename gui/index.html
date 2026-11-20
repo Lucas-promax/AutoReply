@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoReply</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">AutoReply</a>
+    <nav aria-label="工具">
+      <button id="open-settings">设置</button>
+      <button id="open-debug" aria-expanded="false" aria-controls="debug">调试面板</button>
+    </nav>
+  </header>
+  <main id="workspace">
+    <section class="main-panel" aria-labelledby="page-title">
+      <h1 id="page-title">微信回复助手</h1>
+      <div class="conversation">
+        <div>
+          <span class="eyebrow">当前会话</span>
+          <strong id="conversation">尚未识别</strong>
+          <span class="eyebrow" id="active-model"></span>
+        </div>
+        <button id="refresh">刷新会话</button>
+      </div>
+      <section id="background-panel" hidden>
+        <div class="background-heading">
+          <label for="background">对话背景</label>
+          <button id="refresh-background" disabled>刷新概括</button>
+        </div>
+        <textarea id="background" rows="3" disabled placeholder="首次生成回复时自动概括，也可以先手动填写。"></textarea>
+        <p id="background-status" aria-live="polite"></p>
+      </section>
+      <div class="fields">
+        <label>大致回复想法 <span>可选</span>
+          <textarea id="idea" rows="2" placeholder="例如：答应对方，并确认见面的时间"></textarea>
+        </label>
+        <label>再次生成的纠正或方向 <span>可选</span>
+          <textarea id="correction" rows="2" placeholder="例如：语气再随意一点"></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="primary" id="generate">生成回复</button>
+        <button id="retry" disabled>再次生成</button>
+      </div>
+      <p id="status" aria-live="polite">打开微信对话后，可以刷新会话或直接生成回复。</p>
+      <section class="results">
+        <h2>候选回复</h2>
+        <div id="replies"><p class="empty">生成后的回复会显示在这里。</p></div>
+      </section>
+    </section>
+    <aside id="debug" class="debug-panel" hidden>
+      <div class="debug-header">
+        <h2>调试面板</h2>
+        <button id="close-debug" aria-label="关闭调试面板">关闭</button>
+      </div>
+      <dl class="summary">
+        <dt>采集状态</dt><dd id="debug-capture">尚未采集</dd>
+        <dt>会话名称</dt><dd id="debug-title">—</dd>
+        <dt>已加载记录</dt><dd id="debug-count">0</dd>
+        <dt>模型状态</dt><dd id="debug-model">尚未请求</dd>
+      </dl>
+      <details open>
+        <summary>对话历史</summary>
+        <div id="debug-history" class="history"><p>刷新会话后显示已加载记录。</p></div>
+      </details>
+      <details open>
+        <summary>模型请求</summary>
+        <pre id="debug-request">生成后显示模型名称和 messages。</pre>
+      </details>
+      <details>
+        <summary>背景概括请求</summary>
+        <pre id="debug-background">尚未请求概括。</pre>
+      </details>
+      <details>
+        <summary>Capture 原始数据</summary>
+        <pre id="debug-raw">尚无采集结果。</pre>
+      </details>
+      <details open id="debug-error-panel" hidden>
+        <summary>错误详情</summary>
+        <pre id="debug-error"></pre>
+      </details>
+    </aside>
+  </main>
+  <dialog id="settings">
+    <form id="settings-form">
+      <h2>回复设置</h2>
+      <label class="checkbox-label"><input type="checkbox" id="background-enabled"> 开启对话背景</label>
+      <label>候选回复条数
+        <select id="count">
+          <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+        </select>
+      </label>
+      <label>个人说话风格偏好 <span>可选</span>
+        <textarea id="personal" rows="3"></textarea>
+      </label>
+      <label>回复风格说明
+        <textarea id="style" rows="3"></textarea>
+      </label>
+      <p id="settings-error" role="alert"></p>
+      <div class="actions">
+        <button type="submit" class="primary" id="save-settings">保存设置</button>
+        <button type="button" id="close-settings">取消</button>
+      </div>
+    </form>
+    <form id="profile-form">
+      <h2>模型配置</h2>
+      <label>配置
+        <select id="profile"></select>
+      </label>
+      <label>显示别名 <span>可选</span>
+        <input id="profile-alias" type="text" placeholder="例如：ds">
+      </label>
+      <label>Base URL
+        <input id="profile-url" type="url" placeholder="https://api.example.com/v1">
+      </label>
+      <label>模型 ID
+        <input id="profile-model" type="text" placeholder="服务商提供的模型名称">
+      </label>
+      <label>API Key
+        <input id="profile-key" type="password" autocomplete="new-password" spellcheck="false">
+      </label>
+      <div class="actions">
+        <button class="primary" type="submit" id="save-profile">保存并启用</button>
+        <button type="button" id="activate-profile">启用所选配置</button>
+      </div>
+      <p id="profile-status" role="status"></p>
+    </form>
+  </dialog>
+</body>
+</html>
