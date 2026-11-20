@@ -14,7 +14,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-登录微信、打开一个对话，然后双击 `Start-AutoReply.cmd`。AutoReply 会打开独立的 WebView2 小窗。拖动标题栏可移动，右上角可切换置顶，标题栏的最小化按钮可收起窗口。
+登录微信、打开一个对话，然后双击 `Start-AutoReply.vbs`，全程无黑窗。也可以使用 `Start-AutoReply.cmd`，启动时可能短暂闪过命令行窗口。AutoReply 会打开独立的 WebView2 小窗。拖动标题栏可移动，右上角可切换置顶，标题栏的最小化按钮可收起窗口。
 
 在「设置 → 模型配置」中填写 OpenAI 兼容接口的 Base URL、API Key 和模型 ID。模型配置和回复偏好保存在 `core/settings.json`，其中 API Key 以明文保存。
 

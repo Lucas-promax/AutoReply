@@ -36,7 +36,7 @@ async function api(path, payload) {
     data = await response.json();
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error("无法连接本地 AutoReply 服务，连接可能已断开。请重新运行 Start-AutoReply.cmd，并使用新打开的网页。", { cause: error });
+      throw new Error("无法连接本地 AutoReply 服务。请关闭当前窗口，重新运行 Start-AutoReply.vbs。", { cause: error });
     }
     if (error instanceof SyntaxError) {
       throw new Error(`本地 AutoReply 服务返回了无法识别的数据（HTTP ${response.status}）。`, { cause: error });
