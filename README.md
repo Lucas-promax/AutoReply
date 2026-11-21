@@ -1,6 +1,10 @@
 # AutoReply
 
-AutoReply 是 Windows 微信回复助手。它读取微信当前会话，用配置的模型生成候选回复，供你手动复制。
+AutoReply 是微信回复助手。它用配置的模型根据聊天记录生成候选回复，供你复制到微信。
+
+Android 8.0 及以上可安装 [AutoReply-android.apk](android/dist/AutoReply-android.apk)。安装、微信读取和本地构建说明见 [Android 使用说明](android/README.md)。
+
+## Windows
 
 ## 环境与启动
 

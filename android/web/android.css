@@ -1,0 +1,7 @@
+#mobile-actions { margin: 12px 0; }
+#mobile-actions button, .actions button, .reply button { min-height: 44px; }
+#import-form { display: grid; gap: 12px; }
+#import-hint, #import-help, #import-error { font-size: 13px; line-height: 1.5; color: #536b60; }
+#import-error { color: #922c2a; }
+#import-error:empty { display: none; }
+#settings, #import-chat { max-height: 86dvh; overflow: auto; }

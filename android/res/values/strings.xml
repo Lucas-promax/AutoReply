@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_description">在微信中显示「读取聊天」按钮。点击后读取当前屏幕可见的会话文字，用于确认并生成候选回复。</string>
+</resources>

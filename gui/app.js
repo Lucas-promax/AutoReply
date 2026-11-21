@@ -3,6 +3,7 @@ const write = (id, text) => { byId(id).textContent = text; };
 const pretty = (value) => JSON.stringify(value, null, 2);
 const state = { snapshot: null, lastTitle: undefined, previous: [], busy: false };
 const ideaHistory = [];
+const platform = window.autoReplyPlatform;
 
 const pin = byId("pin-window");
 pin.onclick = async () => {
@@ -24,6 +25,11 @@ let backgroundEnabled = false;
 const backgrounds = new Map();
 
 async function api(path, payload) {
+  if (platform) {
+    const data = await platform.request(path, payload);
+    if (data.error) throw Object.assign(new Error(data.error), { details: data });
+    return data;
+  }
   const options = payload === undefined ? {} : {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -60,6 +66,7 @@ function setBusy(busy) {
   byId("correction").disabled = busy;
   byId("background").disabled = busy || !state.snapshot?.ConversationTitle;
   byId("refresh-background").disabled = busy || !state.snapshot?.ConversationTitle;
+  platform?.setBusy(busy);
 }
 
 function showBackground() {
@@ -122,7 +129,8 @@ function renderReplies(replies) {
     copy.textContent = "复制";
     copy.onclick = async () => {
       try {
-        await navigator.clipboard.writeText(reply);
+        if (platform) await platform.copy(reply);
+        else await navigator.clipboard.writeText(reply);
         write("status", "已复制到剪贴板。");
       } catch (error) {
         showError(error);
@@ -158,8 +166,30 @@ function resetReplies() {
   write("debug-request", "生成后显示模型名称和 messages。");
 }
 
-async function refreshConversation(manual = false) {
+function acceptConversation(snapshot, records, manual = false) {
   const previousTitle = state.lastTitle;
+  const title = snapshot.ConversationTitle || null;
+  const changed = previousTitle !== undefined && previousTitle !== title;
+  state.snapshot = snapshot;
+  if (platform || changed || !title) {
+    byId("idea").value = "";
+    byId("correction").value = "";
+  }
+  if (manual || changed || !title) resetReplies();
+  state.lastTitle = title;
+  const caption = title || "会话名称未识别";
+  write("conversation", caption);
+  write("debug-capture", records.length ? "已读取记录" : "已识别会话，暂无记录");
+  write("debug-title", caption);
+  write("debug-count", String(records.length));
+  write("debug-raw", pretty(snapshot));
+  renderHistory(records);
+  if (platform) backgrounds.clear();
+  if (platform || previousTitle !== title) showBackground();
+  return { title, previousTitle, changed };
+}
+
+async function refreshConversation(manual = false) {
   state.snapshot = null;
   write("conversation", "正在识别…");
   write("debug-capture", "正在读取微信");
@@ -167,24 +197,7 @@ async function refreshConversation(manual = false) {
   write("debug-count", "0");
   try {
     const { snapshot, records } = await api("/api/capture", {});
-    state.snapshot = snapshot;
-    const title = snapshot.ConversationTitle || null;
-    const changed = previousTitle !== undefined && previousTitle !== title;
-    if (changed || !title) {
-      byId("idea").value = "";
-      byId("correction").value = "";
-    }
-    if (manual || changed || !title) resetReplies();
-    state.lastTitle = title;
-    const caption = title || "会话名称未识别";
-    write("conversation", caption);
-    write("debug-capture", records.length ? "已读取记录" : "已识别会话，暂无记录");
-    write("debug-title", caption);
-    write("debug-count", String(records.length));
-    write("debug-raw", pretty(snapshot));
-    renderHistory(records);
-    if (previousTitle !== title) showBackground();
-    return { title, previousTitle, changed };
+    return acceptConversation(snapshot, records, manual);
   } catch (error) {
     resetReplies();
     renderHistory([]);
@@ -194,6 +207,12 @@ async function refreshConversation(manual = false) {
     showBackground();
     throw error;
   }
+}
+
+function currentConversation() {
+  if (!platform) return refreshConversation();
+  if (!state.snapshot) throw new Error("请先粘贴聊天，或在微信里点击「读取聊天」。");
+  return { title: state.snapshot.ConversationTitle, changed: false };
 }
 
 async function run(action) {
@@ -225,8 +244,8 @@ function rememberIdea(idea) {
 
 async function generate(retry) {
   if (!retry) byId("correction").value = "";
-  write("status", "正在确认当前微信会话…");
-  const { title, previousTitle, changed } = await refreshConversation();
+  if (!platform) write("status", "正在确认当前微信会话…");
+  const { title, previousTitle, changed } = await currentConversation();
   if (!title) {
     write("status", "无法确认会话名称，未请求模型。请打开目标对话后重试。");
     return;
@@ -292,8 +311,8 @@ byId("background").oninput = () => {
   if (title) backgrounds.set(title, { ...backgrounds.get(title), text: byId("background").value });
 };
 byId("refresh-background").onclick = () => run(async () => {
-  write("status", "正在确认当前微信会话…");
-  const { title, changed } = await refreshConversation();
+  if (!platform) write("status", "正在确认当前微信会话…");
+  const { title, changed } = await currentConversation();
   if (!title || changed) {
     write("status", title ? `已切换到「${title}」，请确认后再点击刷新概括。` : "无法确认当前会话。");
     return;
@@ -452,3 +471,9 @@ settingsDialog.onclick = (event) => {
     return saveAndCloseSettings();
   }
 };
+
+platform?.connect((snapshot) => {
+  acceptConversation(snapshot, snapshot.Records, true);
+  write("status", `已导入 ${snapshot.Records.length} 条记录，可以生成回复。`);
+  setBusy(false);
+});

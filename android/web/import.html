@@ -1,0 +1,18 @@
+<dialog id="import-chat">
+  <form id="import-form">
+    <h2>导入聊天</h2>
+    <p id="import-hint">粘贴聊天文字，或检查从微信读取的记录。</p>
+    <label>会话名称
+      <input id="import-title" maxlength="120" placeholder="可选，例如：小王">
+    </label>
+    <label>聊天记录
+      <textarea id="import-text" rows="8" maxlength="48000" required placeholder="对方：周末有空吗？&#10;我：周六下午有空"></textarea>
+    </label>
+    <p id="import-help">在每条开头添加「我：」或「对方：」可标记发言人。生成时，导入的聊天会发送给所选模型。</p>
+    <p id="import-error" role="alert"></p>
+    <div class="actions">
+      <button class="primary" type="submit">确认导入</button>
+      <button type="button" id="cancel-import">取消</button>
+    </div>
+  </form>
+</dialog>
